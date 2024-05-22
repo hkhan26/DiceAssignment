@@ -2627,4 +2627,5 @@ function get_active_block_variation( $block_type, $block_attributes ) {
 		}
 		return $variation;
 	}
+	return null;
 }

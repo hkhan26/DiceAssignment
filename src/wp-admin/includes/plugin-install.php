@@ -28,26 +28,26 @@
  *
  * Supported arguments per action:
  *
- * | Argument Name        | query_plugins | plugin_information | hot_tags | hot_categories |
- * | -------------------- | :-----------: | :----------------: | :------: | :------------: |
- * | `$slug`              | No            |  Yes               | No       | No             |
- * | `$per_page`          | Yes           |  No                | No       | No             |
- * | `$page`              | Yes           |  No                | No       | No             |
- * | `$number`            | No            |  No                | Yes      | Yes            |
- * | `$search`            | Yes           |  No                | No       | No             |
- * | `$tag`               | Yes           |  No                | No       | No             |
- * | `$author`            | Yes           |  No                | No       | No             |
- * | `$user`              | Yes           |  No                | No       | No             |
- * | `$browse`            | Yes           |  No                | No       | No             |
- * | `$locale`            | Yes           |  Yes               | No       | No             |
- * | `$installed_plugins` | Yes           |  No                | No       | No             |
- * | `$is_ssl`            | Yes           |  Yes               | No       | No             |
- * | `$fields`            | Yes           |  Yes               | No       | No             |
+ * | Argument Name        | query_plugins | plugin_information | hot_tags |
+ * | -------------------- | :-----------: | :----------------: | :------: |
+ * | `$slug`              | No            |  Yes               | No       |
+ * | `$per_page`          | Yes           |  No                | No       |
+ * | `$page`              | Yes           |  No                | No       |
+ * | `$number`            | No            |  No                | Yes      |
+ * | `$search`            | Yes           |  No                | No       |
+ * | `$tag`               | Yes           |  No                | No       |
+ * | `$author`            | Yes           |  No                | No       |
+ * | `$user`              | Yes           |  No                | No       |
+ * | `$browse`            | Yes           |  No                | No       |
+ * | `$locale`            | Yes           |  Yes               | No       |
+ * | `$installed_plugins` | Yes           |  No                | No       |
+ * | `$is_ssl`            | Yes           |  Yes               | No       |
+ * | `$fields`            | Yes           |  Yes               | No       |
  *
  * @since 2.7.0
  *
- * @param string       $action API action to perform: 'query_plugins', 'plugin_information',
- *                             'hot_tags' or 'hot_categories'.
+ * @param string       $action API action to perform: 'query_plugins', 'plugin_information'
+ *                             or 'hot_tags'.
  * @param array|object $args   {
  *     Optional. Array or object of arguments to serialize for the Plugin Info API.
  *

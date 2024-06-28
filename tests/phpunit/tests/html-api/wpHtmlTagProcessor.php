@@ -2875,4 +2875,35 @@ HTML
 			'Should have properly applied the update from in front of the cursor.'
 		);
 	}
+
+	/**
+	 * @ticket TBD
+	 *
+	 * @covers ::remove_class
+	 */
+	public function test_remove_class_removes_leading_white_space() {
+		$processor = new WP_HTML_Tag_Processor( '<div class="remove keep">' );
+		$processor->next_tag();
+		$processor->remove_class( 'remove' );
+		$this->assertSame(
+			'<div class="keep">',
+			$processor->get_updated_html(),
+			'::remove_class did not correctly clean whitespace from removed class.'
+		);
+	}
+	/**
+	 * @ticket TBD
+	 *
+	 * @covers ::remove_class
+	 */
+	public function test_remove_class_maintains_trailing_white_space() {
+		$processor = new WP_HTML_Tag_Processor( '<div class="keep          remove">' );
+		$processor->next_tag();
+		$processor->remove_class( 'remove' );
+		$this->assertSame(
+			'<div class="keep">',
+			$processor->get_updated_html(),
+			'::remove_class did not correctly clean whitespace from removed class.'
+		);
+	}
 }

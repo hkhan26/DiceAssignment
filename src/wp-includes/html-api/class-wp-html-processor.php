@@ -763,7 +763,21 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 				case WP_HTML_Processor_State::INSERTION_MODE_IN_SELECT:
 					return $this->step_in_select();
 
+				case WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE:
+					return $this->step_in_table();
+
+				case WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE_BODY:
+					return $this->step_in_table_body();
+
+				case WP_HTML_Processor_State::INSERTION_MODE_IN_ROW:
+					return $this->step_in_row();
+
+				case WP_HTML_Processor_State::INSERTION_MODE_IN_CELL:
+					return $this->step_in_cell();
+
 				default:
+					echo "\n MODE: " . $this->state->insertion_mode . "\n";
+
 					$this->last_error = self::ERROR_UNSUPPORTED;
 					throw new WP_HTML_Unsupported_Exception( "No support for parsing in the '{$this->state->insertion_mode}' state." );
 			}
@@ -1283,6 +1297,18 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 				return true;
 
 			/*
+			 * > A start tag whose tag name is "table"
+			 */
+			case '+TABLE':
+				if ( $this->state->stack_of_open_elements->has_p_in_button_scope() ) {
+					$this->close_a_p_element();
+				}
+				$this->insert_html_element( $this->state->current_token );
+				$this->state->frameset_ok    = false;
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE;
+				return true;
+
+			/*
 			 * > An end tag whose tag name is "br"
 			 * >   Parse error. Drop the attributes from the token, and act as described in the next
 			 * >   entry; i.e. act as if this was a "br" start tag token with no attributes, rather
@@ -1384,6 +1410,22 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 				$this->reconstruct_active_formatting_elements();
 				$this->insert_html_element( $this->state->current_token );
 				return true;
+
+			/*
+			 * > A start tag whose tag name is one of: "caption", "col", "colgroup", "frame", "head", "tbody", "td", "tfoot", "th", "thead", "tr"
+			 */
+			case 'CAPTION':
+			case 'COL':
+			case 'COLGROUP':
+			case 'FRAME':
+			case 'HEAD':
+			case 'TBODY':
+			case 'TD':
+			case 'TFOOT':
+			case 'TH':
+			case 'THEAD':
+			case 'TR':
+				return $this->step();
 		}
 
 		/*
@@ -1408,9 +1450,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 			case 'BASEFONT':
 			case 'BGSOUND':
 			case 'BODY':
-			case 'CAPTION':
-			case 'COL':
-			case 'COLGROUP':
 			case 'FORM':
 			case 'FRAME':
 			case 'FRAMESET':
@@ -1435,16 +1474,9 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 			case 'SCRIPT':
 			case 'STYLE':
 			case 'SVG':
-			case 'TABLE':
-			case 'TBODY':
-			case 'TD':
 			case 'TEMPLATE':
 			case 'TEXTAREA':
-			case 'TFOOT':
-			case 'TH':
-			case 'THEAD':
 			case 'TITLE':
-			case 'TR':
 			case 'XMP':
 				$this->last_error = self::ERROR_UNSUPPORTED;
 				throw new WP_HTML_Unsupported_Exception( "Cannot process {$token_name} element." );
@@ -1694,6 +1726,513 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		return $this->step();
 	}
 
+	/**
+	 * Parses next element in the 'in table' insertion mode.
+	 *
+	 * This internal function performs the 'in table' insertion mode
+	 * logic for the generalized WP_HTML_Processor::step() function.
+	 *
+	 * @since 6.7.0
+	 *
+	 * @throws WP_HTML_Unsupported_Exception When encountering unsupported HTML input.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
+	 * @see WP_HTML_Processor::step
+	 *
+	 * @return bool Whether an element was found.
+	 */
+	private function step_in_table() {
+		$token_name = $this->get_token_name();
+		$token_type = $this->get_token_type();
+		$op_sigil   = '#tag' === $token_type ? ( parent::is_tag_closer() ? '-' : '+' ) : '';
+		$op         = "{$op_sigil}{$token_name}";
+
+
+		switch ( $op ) {
+			/*
+			 * > A character token, if the current node is table, tbody, template, tfoot, thead, or tr element
+			 */
+			case '#text':
+				$this->last_error = self::ERROR_UNSUPPORTED;
+				throw new WP_HTML_Unsupported_Exception( "Text in tables is not supported." );
+
+			/*
+			 * > A comment token
+			 */
+			case '#comment':
+			case '#funky-comment':
+				$this->insert_html_element( $this->state->current_token );
+				return true;
+
+
+			/*
+			 * > A DOCTYPE token
+			 */
+			case 'html':
+				// Parse error. Ignore the token.
+				return $this->step();
+
+			/*
+			 * > A start tag whose tag name is "caption"
+			 */
+			case '+CAPTION':
+				$this->clear_stack_to_table_context();
+				$this->state->active_formatting_elements->set_marker();
+				$this->insert_html_element( $this->state->current_token );
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_CAPTION;
+				return true;
+
+			/*
+			 * > A start tag whose tag name is "colgroup"
+			 */
+			case '+COLGROUP':
+				$this->clear_stack_to_table_context();
+				$this->insert_html_element( $this->state->current_token );
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_COLUMN_GROUP;
+				return true;
+
+			/*
+			 * > A start tag whose tag name is "col"
+			 */
+			case '+COL':
+				$this->clear_stack_to_table_context();
+				$this->insert_html_element(
+					new WP_HTML_Token( null, 'COLGROUP', false )
+				);
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_COLUMN_GROUP;
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > A start tag whose tag name is one of: "tbody", "tfoot", "thead"
+			 */
+			case '+TBODY':
+			case '+TFOOT':
+			case '+THEAD':
+				$this->clear_stack_to_table_context();
+				$this->insert_html_element( $this->state->current_token );
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE_BODY;
+				return true;
+
+			/*
+			 * > A start tag whose tag name is one of: "td", "th", "tr"
+			 */
+			case '+TD':
+			case '+TH':
+			case '+TR':
+				$this->clear_stack_to_table_context();
+				$this->insert_html_element(
+					new WP_HTML_Token( null, 'TBODY', false )
+				);
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE_BODY;
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > A start tag whose tag name is "table"
+			 */
+			case '+TABLE':
+				// pase error
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TABLE' ) ) {
+					return $this->step();
+				}
+				$this->state->stack_of_open_elements->pop_until( 'TABLE' );
+				$this->reset_insertion_mode();
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > An end tag whose tag name is "table"
+			 */
+			case '-TABLE':
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TABLE' ) ) {
+					// parse error
+					return $this->step();
+				}
+				$this->state->stack_of_open_elements->pop_until( 'TABLE' );
+				$this->reset_insertion_mode();
+				return true;
+
+			/*
+			 * > An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html", "tbody", "td", "tfoot", "th", "thead", "tr"
+			 */
+			case '-BODY':
+			case '-CAPTION':
+			case '-COL':
+			case '-COLGROUP':
+			case '-HTML':
+			case '-TBODY':
+			case '-TD':
+			case '-TFOOT':
+			case '-TH':
+			case '-THEAD':
+			case '-TR':
+				// parse error
+				return $this->step();
+
+			/*
+			 * > A start tag whose tag name is one of: "style", "script", "template"
+			 * > An end tag whose tag name is "template"
+			 */
+			case '+STYLE':
+			case '+SCRIPT':
+			case '+TEMPLATE':
+			case '-TEMPLATE':
+				// > Process the token using the rules for the "in head" insertion mode.
+				$this->last_error = self::ERROR_UNSUPPORTED;
+				throw new WP_HTML_Unsupported_Exception( "Cannot process {$tag_name} element." );
+
+			/*
+			 * > A start tag whose tag name is "input"
+			 *
+			 * > If the token does not have an attribute with the name "type", or if it does, but
+			 * > that attribute's value is not an ASCII case-insensitive match for the string
+			 * > "hidden", then: act as described in the "anything else" entry below.
+			 */
+			case '+INPUT':
+				$type_attribute = $this->get_attribute( 'type' );
+				if ( ! is_string( $type_attribute ) || 'hidden' !== strtolower( $type_attribute ) ) {
+					break;
+				}
+				// parse error
+				$this->insert_html_element( $this->state->current_token );
+				return true;
+
+			/*
+			 * > A start tag whose tag name is "form"
+			 */
+			case '+FORM':
+				if (
+					$this->state->stack_of_open_elements->has_element_in_scope( 'TEMPLATE' ) ||
+					$this->has_element_pointer( 'FORM' )
+				) {
+					return $this->step();
+				}
+				$this->insert_html_element( $this->state->current_token );
+				$this->set_element_pointer( 'FORM' );
+				return true;
+
+			/*
+			 * > An end-of-file token
+			 */
+
+		}
+
+		/*
+		 * > Anything else
+		 * > Parse error. Enable foster parenting, process the token using the rules for the
+		 * > "in body" insertion mode, and then disable foster parenting.
+		 */
+		$this->last_error = self::ERROR_UNSUPPORTED;
+		throw new WP_HTML_Unsupported_Exception( "Cannot process {$tag_name} element." );
+	}
+
+	/**
+	 * Parses next element in the 'in table body' insertion mode.
+	 *
+	 * This internal function performs the 'in table body' insertion mode
+	 * logic for the generalized WP_HTML_Processor::step() function.
+	 *
+	 * @since 6.7.0
+	 *
+	 * @throws WP_HTML_Unsupported_Exception When encountering unsupported HTML input.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intbody
+	 * @see WP_HTML_Processor::step
+	 *
+	 * @return bool Whether an element was found.
+	 */
+	private function step_in_table_body() {
+		$tag_name = $this->get_tag();
+		$op_sigil = $this->is_tag_closer() ? '-' : '+';
+		$op       = "{$op_sigil}{$tag_name}";
+
+		switch ( $op ) {
+			/*
+			 * > A start tag whose tag name is "tr"
+			 */
+			case '+TR':
+				$this->clear_stack_to_table_body_context();
+				$this->insert_html_element( $this->state->current_token );
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_ROW;
+				return true;
+
+			/*
+			 * > A start tag whose tag name is one of: "th", "td"
+			 */
+			case '+TH':
+			case '+TD':
+				// parse error
+				$this->clear_stack_to_table_body_context();
+				$this->insert_html_element(
+					new WP_HTML_Token( null, 'TR', false )
+				);
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_ROW;
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > An end tag whose tag name is one of: "tbody", "tfoot", "thead"
+			 */
+			case '-TBODY':
+			case '-TFOOT':
+			case '-THEAD':
+				if (
+					! $this->state->stack_of_open_elements->has_element_in_table_scope( $tag_name )
+				) {
+					// parse error
+					return $this->step();
+				}
+				$this->state->stack_of_open_elements->pop();
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE;
+				return true;
+
+			/*
+			 * > A start tag whose tag name is one of: "caption", "col", "colgroup", "tbody", "tfoot", "thead"
+			 * > An end tag whose tag name is "table"
+			 */
+			case '+CAPTION':
+			case '+COL':
+			case '+COLGROUP':
+			case '+TBODY':
+			case '+TFOOT':
+			case '+THEAD':
+			case '-TABLE':
+				if (
+					! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TBODY' ) &&
+					! $this->state->stack_of_open_elements->has_element_in_table_scope( 'THEAD' ) &&
+					! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TFOOT' )
+				) {
+					// parse error
+					return $this->step();
+				}
+				$this->clear_stack_to_table_body_context();
+				$this->state->stack_of_open_elements->pop();
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE;
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html", "td", "th", "tr"
+			 */
+			case '-BODY':
+			case '-CAPTION':
+			case '-COL':
+			case '-COLGROUP':
+			case '-HTML':
+			case '-TD':
+			case '-TH':
+			case '-TR':
+				// parse error
+				return $this->step();
+		}
+
+		/*
+		 * > Anything else
+		 * > Process the token using the rules for the "in table" insertion mode.
+		 */
+		return $this->step_in_table();
+	}
+
+	/**
+	 * Parses next element in the 'in row' insertion mode.
+	 *
+	 * This internal function performs the 'in row' insertion mode
+	 * logic for the generalized WP_HTML_Processor::step() function.
+	 *
+	 * @since 6.7.0
+	 *
+	 * @throws WP_HTML_Unsupported_Exception When encountering unsupported HTML input.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intr
+	 * @see WP_HTML_Processor::step
+	 *
+	 * @return bool Whether an element was found.
+	 */
+	private function step_in_row() {
+		$tag_name = $this->get_tag();
+		$op_sigil = $this->is_tag_closer() ? '-' : '+';
+		$op       = "{$op_sigil}{$tag_name}";
+
+		switch ( $op ) {
+			/*
+			 * > A start tag whose tag name is one of: "th", "td"
+			 */
+			case '+TH':
+			case '+TD':
+				$this->clear_stack_to_table_row_context();
+				$this->insert_html_element( $this->state->current_token );
+				$this->state->active_formatting_elements->set_marker();
+				return true;
+
+			/*
+			 * > An end tag whose tag name is "tr"
+			 */
+			case '-TR':
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TR' ) ) {
+					// this is a parse error; ignore the token.
+					return $this->step();
+				}
+				$this->clear_stack_to_table_row_context();
+				$this->state->stack_of_open_elements->pop();
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE_BODY;
+				return true;
+
+			/*
+			 * > A start tag whose tag name is one of: "caption", "col", "colgroup", "tbody", "tfoot", "thead", "tr"
+			 * > An end tag whose tag name is "table"
+			 */
+			case '+CAPTION':
+			case '+COL':
+			case '+COLGROUP':
+			case '+TBODY':
+			case '+TFOOT':
+			case '+THEAD':
+			case '+TR':
+			case '-TABLE':
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TR' ) ) {
+					// this is a parse error; ignore the token.
+					return $this->step();
+				}
+				$this->clear_stack_to_table_row_context();
+				$this->state->stack_of_open_elements->pop();
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE_BODY;
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > An end tag whose tag name is one of: "tbody", "tfoot", "thead"
+			 */
+			case '-TBODY':
+			case '-TFOOT':
+			case '-THEAD':
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( $tag_name ) ) {
+					// this is a parse error; ignore the token.
+					return $this->step();
+				}
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TR' ) ) {
+					// ignore the token.
+					return $this->step();
+				}
+				$this->clear_stack_to_table_row_context();
+				$this->state->stack_of_open_elements->pop();
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE_BODY;
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html", "td", "th"
+			 */
+			case '-BODY':
+			case '-CAPTION':
+			case '-COL':
+			case '-COLGROUP':
+			case '-HTML':
+			case '-TD':
+			case '-TH':
+				// this is a parse error; ignore the token.
+				return $this->step();
+		}
+
+		/*
+		 * > Anything else
+		 * >   Process the token using the rules for the "in table" insertion mode.
+		 */
+		return $this->step_in_table();
+	}
+
+	/**
+	 * Parses next element in the 'in cell' insertion mode.
+	 *
+	 * This internal function performs the 'in cell' insertion mode
+	 * logic for the generalized WP_HTML_Processor::step() function.
+	 *
+	 * @since 6.7.0
+	 *
+	 * @throws WP_HTML_Unsupported_Exception When encountering unsupported HTML input.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intd
+	 * @see WP_HTML_Processor::step
+	 *
+	 * @return bool Whether an element was found.
+	 */
+	private function step_in_cell() {
+		$tag_name = $this->get_tag();
+		$op_sigil = $this->is_tag_closer() ? '-' : '+';
+		$op       = "{$op_sigil}{$tag_name}";
+
+		switch ( $op ) {
+			/*
+			 * > An end tag whose tag name is one of: "td", "th"
+			 */
+			case '-TD':
+			case '-TH':
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( $tag_name ) ) {
+					// this is a parse error; ignore the token.
+					return $this->step();
+				}
+				$this->generate_implied_end_tags();
+				/*
+				 * @todo report a parse error when supported.
+				 *
+				 * if ( ! $this->state->stack_of_open_elements->current_node()->node_name ) {}
+				 */
+				$this->state->stack_of_open_elements->pop_until( $tag_name );
+				$this->state->active_formatting_elements->clear_up_to_last_marker();
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_ROW;
+				return true;
+
+			/*
+			 * > A start tag whose tag name is one of: "caption", "col", "colgroup", "tbody", "td",
+			 * > "tfoot", "th", "thead", "tr"
+			 */
+			case '+CAPTION':
+			case '+COL':
+			case '+COLGROUP':
+			case '+TBODY':
+			case '+TD':
+			case '+TFOOT':
+			case '+TH':
+			case '+THEAD':
+			case '+TR':
+				// Assert: The stack of open elements has a td or th element in table scope.
+				if (
+					! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TD' ) &&
+					! $this->state->stack_of_open_elements->has_element_in_table_scope( 'TH' )
+				) {
+					throw new Exception( 'Assertion failed @todo better message' );
+				}
+
+				$this->close_cell();
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+
+			/*
+			 * > An end tag whose tag name is one of: "body", "caption", "col", "colgroup", "html"
+			 */
+			case '-BODY':
+			case '-CAPTION':
+			case '-COL':
+			case '-COLGROUP':
+			case '-HTML':
+				// Parse error. Ignore the token.
+				return $this->step();
+
+			/*
+			 * > An end tag whose tag name is one of: "table", "tbody", "tfoot", "thead", "tr"
+			 */
+			case '-TABLE':
+			case '-TBODY':
+			case '-TFOOT':
+			case '-THEAD':
+			case '-TR':
+				if ( ! $this->state->stack_of_open_elements->has_element_in_table_scope( $tag_name ) ) {
+					// Parse error. Ignore the token.
+					return $this->step();
+				}
+				$this->close_cell();
+				return $this->step( self::REPROCESS_CURRENT_NODE );
+		}
+
+		/*
+		 * > Anything else
+		 * >   Process the token using the rules for the "in body" insertion mode.
+		 */
+		return $this->step_in_body();
+	}
+
 	/*
 	 * Internal helpers
 	 */
@@ -1715,6 +2254,80 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		}
 
 		return "{$this->bookmark_counter}";
+	}
+
+	/**
+	 * Clear the stack back to a table context.
+	 *
+	 * > When the steps above require the UA to clear the stack back to a table context, it means
+	 * > that the UA must, while the current node is not a table, template, or html element, pop
+	 * > elements from the stack of open elements.
+	 *
+	 * @todo move this to open elements class.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context
+	 */
+	private function clear_stack_to_table_context() {
+		foreach ( $this->state->stack_of_open_elements->walk_up() as $item ) {
+			if (
+				'TABLE' === $item->node_name ||
+				'TEMPLATE' === $item->node_name ||
+				'HTML' === $item->node_name
+			) {
+				break;
+			}
+			$this->state->stack_of_open_elements->pop();
+		}
+	}
+
+	/**
+	 * Clear the stack back to a table body context.
+	 *
+	 * > When the steps above require the UA to clear the stack back to a table body context, it
+	 * > means that the UA must, while the current node is not a tbody, tfoot, thead, template, or
+	 * > html element, pop elements from the stack of open elements.
+	 *
+	 * @todo move this to open elements class.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-body-context
+	 */
+	private function clear_stack_to_table_body_context() {
+		foreach ( $this->state->stack_of_open_elements->walk_up() as $item ) {
+			if (
+				'TBODY' === $item->node_name ||
+				'TFOOT' === $item->node_name ||
+				'THEAD' === $item->node_name ||
+				'TEMPLATE' === $item->node_name ||
+				'HTML' === $item->node_name
+			) {
+				break;
+			}
+			$this->state->stack_of_open_elements->pop();
+		}
+	}
+
+	/**
+	 * Clear the stack back to a table row context.
+	 *
+	 * > When the steps above require the UA to clear the stack back to a table row context, it
+	 * > means that the UA must, while the current node is not a tr, template, or html element, pop
+	 * > elements from the stack of open elements.
+	 *
+	 * @todo move this to open elements class.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-row-context
+	 */
+	private function clear_stack_to_table_row_context() {
+		foreach ( $this->state->stack_of_open_elements->walk_up() as $item ) {
+			if (
+				'TR' === $item->node_name ||
+				'TEMPLATE' === $item->node_name ||
+				'HTML' === $item->node_name
+			) {
+				break;
+			}
+			$this->state->stack_of_open_elements->pop();
+		}
 	}
 
 	/*
@@ -2260,6 +2873,14 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		return parent::has_bookmark( "_{$bookmark_name}" );
 	}
 
+	private function set_element_pointer( string $tag_name ) {
+		return parent::set_bookmark( "element_pointer_{$tag_name}" );
+	}
+
+	private function has_element_pointer( string $tag_name ) {
+		return parent::has_bookmark( "element_pointer_{$tag_name}" );
+	}
+
 	/*
 	 * HTML Parsing Algorithms
 	 */
@@ -2690,6 +3311,34 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 		$this->last_error = self::ERROR_UNSUPPORTED;
 		throw new WP_HTML_Unsupported_Exception( 'Cannot run adoption agency when looping required.' );
+	}
+
+	/**
+	 * Runs the close cell algorithm.
+	 *
+	 * @see https://html.spec.whatwg.org/multipage/parsing.html#close-the-cell
+	 *
+	 * Where the steps above say to close the cell, they mean to run the following algorithm:
+
+	 * > 1. Generate implied end tags.
+	 * > 2. If the current node is not now a td element or a th element, then this is a parse error.
+	 * > 3. Pop elements from the stack of open elements stack until a td element or a th element has been popped from the stack.
+	 * > 4. Clear the list of active formatting elements up to the last marker.
+	 * > 5. Switch the insertion mode to "in row".
+	 *
+	 * @since 6.7.0
+	 */
+	private function close_cell(): void {
+		$this->generate_implied_end_tags();
+		// @todo Parse error if the current node is a "td" or "th" element.
+		foreach ( $this->state->stack_of_open_elements->walk_up() as $element ) {
+			$this->state->stack_of_open_elements->pop();
+			if ( 'TD' === $element->node_name || 'TH' === $element->node_name ) {
+				break;
+			}
+		}
+		$this->state->active_formatting_elements->clear_up_to_last_marker();
+		$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_ROW;
 	}
 
 	/**

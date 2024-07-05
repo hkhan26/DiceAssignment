@@ -1613,6 +1613,12 @@ ul.wp-block-archives li ul,
   width: 100%;
 }
 
+/** === Read More Block === */
+.wp-block.wp-block-read-more {
+  width: -moz-fit-content;
+  width: fit-content;
+}
+
 /** === Post Author Block === */
 .avatar,
 .wp-block-post-author__avatar img {

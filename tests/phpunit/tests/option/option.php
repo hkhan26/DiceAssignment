@@ -478,4 +478,26 @@ class Tests_Option_Option extends WP_UnitTestCase {
 		delete_option( 'foo' );
 		$this->assertFalse( get_option( 'foo' ) );
 	}
+
+	/**
+	 * Tests that calling delete_option() update notoptions when option deleted.
+	 *
+	 * @ticket 61484
+	 *
+	 * @covers ::delete_option
+	 */
+	public function test_check_delete_option_updates_notoptions() {
+		add_option( 'foo', 'value1' );
+
+		delete_option( 'foo' );
+		$notoptions = wp_cache_get( 'notoptions', 'options' );
+		$this->assertIsArray( $notoptions, 'The notoptions cache is expected to be an array.' );
+		$this->assertTrue( $notoptions['foo'], 'The deleted options is expected to be in notoptions.' );
+
+		$before = get_num_queries();
+		get_option( 'foo' );
+		$queries = get_num_queries() - $before;
+
+		$this->assertSame( 0, $queries, 'get_option should not make any database queries.' );
+	}
 }

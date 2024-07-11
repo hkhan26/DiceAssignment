@@ -3096,6 +3096,333 @@ class WP_Test_REST_Post_Meta_Fields extends WP_Test_REST_TestCase {
 	}
 
 	/**
+	 * @ticket 55600
+	 * @dataProvider data_skalar_default
+	 */
+	public function test_skalar_singular_default_is_saved_to_db( $type, $default_value, $alternative_value ) {
+		$this->grant_write_permission();
+
+		$meta_key_single = 'with_' . $type . '_default';
+
+		register_post_meta(
+			'post',
+			$meta_key_single,
+			array(
+				'type'         => $type,
+				'single'       => true,
+				'show_in_rest' => true,
+				'default'      => $default_value,
+			)
+		);
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_single => $default_value,
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_single, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 1, $meta );
+		$this->assertSame( (string) $default_value, $meta[0] );
+	}
+
+	/**
+	 * @ticket 55600
+	 * @dataProvider data_skalar_default
+	 */
+	public function test_skalar_multi_default_is_saved_to_db( $type, $default_value, $alternative_value ) {
+		$this->grant_write_permission();
+
+		$meta_key_multiple = 'with_multi_' . $type . '_default';
+
+		// register non-singular post meta for type
+		register_post_meta(
+			'post',
+			$meta_key_multiple,
+			array(
+				'type'         => $type,
+				'single'       => false,
+				'show_in_rest' => true,
+				'default'      => $default_value,
+			)
+		);
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_multiple => array( $default_value ),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_multiple, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 1, $meta );
+		$this->assertSame( (string) $default_value, $meta[0] );
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_multiple => array(
+						$default_value,
+						$alternative_value,
+					),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_multiple, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 2, $meta );
+		$this->assertSame( (string) $default_value, $meta[0] );
+		$this->assertSame( (string) $alternative_value, $meta[1] );
+	}
+
+	/**
+	 * @ticket 55600
+	 * @dataProvider data_skalar_default
+	 */
+	public function test_object_singular_default_is_saved_to_db( $type, $default_value, $alternative_value ) {
+		$this->grant_write_permission();
+
+		$meta_key_single = 'with_' . $type . '_default';
+
+		// register singular post meta for type
+		register_post_meta(
+			'post',
+			$meta_key_single,
+			array(
+				'type'         => 'object',
+				'single'       => true,
+				'show_in_rest' => array(
+					'schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							$type => array( 'type' => $type ),
+						),
+					),
+				),
+				'default'      => (object) array( $type => $default_value ),
+			)
+		);
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_single => (object) array( $type => $default_value ),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_single, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 1, $meta );
+		// Array instead of object because objects coming from the DB are arrays and not objects
+		$this->assertSame( array( $type => $default_value ), $meta[0] );
+	}
+
+	/**
+	 * @ticket 55600
+	 * @dataProvider data_skalar_default
+	 */
+	public function test_object_multi_default_is_saved_to_db( $type, $default_value, $alternative_value ) {
+		$this->grant_write_permission();
+
+		$meta_key_multiple = 'with_multi_' . $type . '_default';
+
+		// register non-singular post meta for type
+		register_post_meta(
+			'post',
+			$meta_key_multiple,
+			array(
+				'type'         => 'object',
+				'single'       => false,
+				'show_in_rest' => array(
+					'schema' => array(
+						'type'       => 'object',
+						'properties' => array(
+							$type => array( 'type' => $type ),
+						),
+					),
+				),
+				'default'      => (object) array( $type => $default_value ),
+			)
+		);
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_multiple => array( (object) array( $type => $default_value ) ),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_multiple, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 1, $meta );
+		// Array instead of object because objects coming from the DB are arrays and not objects
+		$this->assertSame( array( $type => $default_value ), $meta[0] );
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_multiple => array(
+						(object) array( $type => $default_value ),
+						(object) array( $type => $alternative_value ),
+					),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_multiple, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 2, $meta );
+		// Array instead of object because objects coming from the DB are arrays and not objects
+		$this->assertSame( array( $type => $default_value ), $meta[0] );
+		$this->assertSame( array( $type => $alternative_value ), $meta[1] );
+	}
+
+	/**
+	 * @ticket 55600
+	 * @dataProvider data_skalar_default
+	 */
+	public function test_array_singular_default_is_saved_to_db( $type, $default_value, $alternative_value ) {
+		$this->grant_write_permission();
+
+		$meta_key_single = 'with_' . $type . '_default';
+
+		// register singular post meta for type
+		register_post_meta(
+			'post',
+			$meta_key_single,
+			array(
+				'type'         => 'array',
+				'single'       => true,
+				'show_in_rest' => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array(
+							'type' => $type,
+						),
+					),
+				),
+				'default'      => $default_value,
+			)
+		);
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_single => array( $default_value ),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_single, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 1, $meta );
+		$this->assertSame( array( $default_value ), $meta[0] );
+	}
+
+	/**
+	 * @ticket 55600
+	 * @dataProvider data_skalar_default
+	 */
+	public function test_array_multi_default_is_saved_to_db( $type, $default_value, $alternative_value ) {
+		$this->grant_write_permission();
+
+		$meta_key_multiple = 'with_multi_' . $type . '_default';
+
+		// register non-singular post meta for type
+		register_post_meta(
+			'post',
+			$meta_key_multiple,
+			array(
+				'type'         => 'array',
+				'single'       => false,
+				'show_in_rest' => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array(
+							'type' => $type,
+						),
+					),
+				),
+				'default'      => $default_value,
+			)
+		);
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_multiple => array( array( $default_value ) ),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_multiple, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 1, $meta );
+		$this->assertSame( array( $default_value ), $meta[0] );
+
+		$request = new WP_REST_Request( 'POST', sprintf( '/wp/v2/posts/%d', self::$post_id ) );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					$meta_key_multiple => array(
+						array( $default_value ),
+						array( $alternative_value ),
+					),
+				),
+			)
+		);
+
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+
+		$meta = get_metadata_raw( 'post', self::$post_id, $meta_key_multiple, false );
+		$this->assertNotEmpty( $meta );
+		$this->assertCount( 2, $meta );
+		$this->assertSame( array( $default_value ), $meta[0] );
+		$this->assertSame( array( $alternative_value ), $meta[1] );
+	}
+
+	/**
 	 * @ticket 48823
 	 */
 	public function test_multiple_errors_are_returned_at_once() {
@@ -3514,6 +3841,18 @@ class WP_Test_REST_Post_Meta_Fields extends WP_Test_REST_TestCase {
 				false,
 				'cpt',
 			),
+		);
+	}
+
+	/**
+	 * Provide data for the tests of saving default values
+	 */
+	public function data_skalar_default() {
+		return array(
+			array( 'boolean', true, false ),
+			array( 'integer', 42, 43 ),
+			array( 'number', 42.99, 43.99 ),
+			array( 'string', 'string', 'string2' ),
 		);
 	}
 }

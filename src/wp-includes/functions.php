@@ -7646,6 +7646,7 @@ function wp_validate_boolean( $value ) {
  * @since 4.2.0
  *
  * @param string $file The path to the file to delete.
+ * @return bool True if the file has been deleted successfully, false on failure.
  */
 function wp_delete_file( $file ) {
 	/**
@@ -7657,8 +7658,9 @@ function wp_delete_file( $file ) {
 	 */
 	$delete = apply_filters( 'wp_delete_file', $file );
 	if ( ! empty( $delete ) ) {
-		@unlink( $delete );
+		return @unlink( $delete );
 	}
+	return false;
 }
 
 /**

@@ -9012,3 +9012,34 @@ function wp_admin_notice( $message, $args = array() ) {
 
 	echo wp_kses_post( wp_get_admin_notice( $message, $args ) );
 }
+
+/**
+ * Outputs the tooltip for a specific field.
+ *
+ * @since 6.7.0
+ *
+ * @param string $field_id             The unique identifier for the tooltip container.
+ * @param string $tooltip_text                   The text content to be displayed in the tooltip.
+ * @param string $tooltip_button_label Optional. The label for the tooltip button. Default is 'Help'.
+ */
+function add_tooltip( $field_id, $tooltip_text, $tooltip_button_label = 'Help' ) {
+	?>
+	<div class="wp-tooltip-container <?php echo esc_attr( $field_id ); ?>">
+		<button type="button" class="wp-tooltip-button" aria-describedby="<?php echo esc_attr( $field_id ); ?>-tooltip" aria-label="<?php echo esc_attr( $tooltip_button_label ); ?>">
+			<span class="dashicons dashicons-editor-help"></span>
+		</button>
+		<div id="<?php echo esc_attr( $field_id ); ?>-tooltip" class="wp-tooltip-content">
+			<p><?php echo esc_html( $tooltip_text ); ?></p>
+		</div>
+	</div>
+	<?php
+
+	/**
+	 * Enqueues the Styles and Scripts for the Tooltip.
+	 *
+	 * @since 6.7.0
+	 *
+	 */
+	wp_enqueue_style( 'wp-tooltip' );
+	wp_enqueue_script( 'wp-tooltip' );
+}
